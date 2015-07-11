@@ -1,7 +1,8 @@
 var chai = require('chai'),
     should = chai.should(),
     expect = chai.expect,
-    raneto = require('../raneto');
+    raneto = require('../raneto'),
+    nock = require('nock');
 
 chai.config.truncateThreshold = 0;
 
@@ -112,17 +113,61 @@ describe('#getPage()', function() {
 describe('#getPages()', function() {
     it('returns an array of categories and pages', function() {
         raneto.config.content_dir = __dirname +'/content/';
-        var result = raneto.getPages();
-        expect(result[0]).to.have.property('is_index', true);
-        expect(result[0].files[0]).to.have.property('title', 'Example Page');
-        expect(result[1]).to.have.property('slug', 'sub');
-        expect(result[1].files[0]).to.have.property('title', 'Example Sub Page');
+        raneto.getPages()
+            .done(function(result) {
+                expect(result[0]).to.have.property('is_index', true);
+                expect(result[0].files[0]).to.have.property('title', 'Example Page');
+                expect(result[1]).to.have.property('slug', 'sub');
+                expect(result[1].files[0]).to.have.property('title', 'Example Sub Page');
+            });
     });
     it('marks activePageSlug as active', function() {
         raneto.config.content_dir = __dirname +'/content/';
-        var result = raneto.getPages('/example-page');
-        expect(result[0].files[0]).to.have.property('active', true);
-        expect(result[1].files[0]).to.have.property('active', false);
+        raneto.getPages('/example-page')
+            .done(function(result) {
+                expect(result[0].files[0]).to.have.property('active', true);
+                expect(result[1].files[0]).to.have.property('active', false);
+            });
+    });
+    it('returns content from providers', function(done) {
+        var expected_call = nock('http://testprovider.localhost')
+            .get('/api')
+            .reply(200, {
+                provider: 'test_provider',
+                slug: '/index',
+                pages: [{
+                    slug: "install",
+                    title: "Install",
+                    is_index: false,
+                    class: "category-install",
+                    sort: 1,
+                    files: [
+                        {
+                            slug: "install/requirements",
+                            title: "Requirements",
+                            active: false,
+                            sort: 1
+                        },
+                        {
+                            slug: "install/installing-raneto",
+                            title: "Installing Raneto",
+                            active: false,
+                            sort: 2
+                        }
+                    ]
+                }]
+            });
+
+        raneto.config.content_dir = __dirname +'/content/';
+        raneto.config.provider_dir = __dirname +'/providers/';
+        raneto.getPages()
+            .done(function(result) {
+                expected_call.done();
+                expect(result).to.have.length(3);
+                expect(result[2].files).to.have.length(2);
+                expect(result[2].files[0]).to.have.property('title', 'Requirements');
+                done();
+            })
     });
 });
 
